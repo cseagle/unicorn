@@ -145,6 +145,7 @@ static inline bool _hook_exists_bounded(struct list_item *cur, uint64_t addr)
 struct uc_struct {
     uc_arch arch;
     uc_mode mode;
+    char model[32]; // CPU model, or empty ('') for default model
     QemuMutex qemu_global_mutex; // qemu/cpus.c
     QemuCond qemu_cpu_cond; // qemu/cpus.c
     QemuThread *tcg_cpu_thread; // qemu/cpus.c

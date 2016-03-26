@@ -199,7 +199,7 @@ static void test_i386(void)
     printf("Emulate i386 code\n");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -328,7 +328,7 @@ static void test_i386_jump(void)
     printf("Emulate i386 code with jump\n");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -375,7 +375,7 @@ static void test_i386_loop(void)
     printf("Emulate i386 code that loop forever\n");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -427,7 +427,7 @@ static void test_i386_invalid_mem_read(void)
     printf("Emulate i386 code that read from invalid memory\n");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -485,7 +485,7 @@ static void test_i386_invalid_mem_write(void)
     printf("Emulate i386 code that write to invalid memory\n");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -556,7 +556,7 @@ static void test_i386_jump_invalid(void)
     printf("Emulate i386 code that jumps to invalid memory\n");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -612,7 +612,7 @@ static void test_i386_inout(void)
     printf("Emulate i386 code with IN/OUT instructions\n");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -687,7 +687,7 @@ static void test_x86_64(void)
     printf("Emulate x86_64 code\n");
 
     // Initialize emulator in X86-64bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_64, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_64, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -788,7 +788,7 @@ static void test_x86_64_syscall(void)
     printf("Emulate x86_64 code with 'syscall' instruction\n");
 
     // Initialize emulator in X86-64bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_64, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_64, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -840,7 +840,7 @@ static void test_x86_16(void)
     printf("Emulate x86 16-bit code\n");
 
     // Initialize emulator in X86-16bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_16, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_16, NULL, &uc);
     if (err) {
         printf("Failed on uc_open() with error returned: %u\n", err);
         return;

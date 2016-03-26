@@ -132,7 +132,7 @@ static void do_nx_demo(bool cause_fault)
     printf("# Example of marking memory NX (%s)\n", cause_fault ? "faulting" : "non-faulting");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("not ok - Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -215,7 +215,7 @@ static void do_perms_demo(bool change_perms)
     printf("# Example of manipulating memory permissions\n");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("not ok - Failed on uc_open() with error returned: %u\n", err);
         return;
@@ -293,7 +293,7 @@ static void do_unmap_demo(bool do_unmap)
     printf("# Example of unmapping memory\n");
 
     // Initialize emulator in X86-32bit mode
-    err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc);
+    err = uc_open(UC_ARCH_X86, UC_MODE_32, NULL, &uc);
     if (err) {
         printf("not ok - Failed on uc_open() with error returned: %u\n", err);
         return;
