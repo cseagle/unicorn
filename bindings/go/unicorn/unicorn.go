@@ -7,9 +7,10 @@ import (
 )
 
 /*
+#cgo CFLAGS: -O3
 #cgo LDFLAGS: -lunicorn
 #include <unicorn/unicorn.h>
-#include <stdlib.h>
+#include "uc.h"
 */
 import "C"
 
@@ -42,7 +43,9 @@ type Unicorn interface {
 	MemReadInto(dst []byte, addr uint64) error
 	MemWrite(addr uint64, data []byte) error
 	RegRead(reg int) (uint64, error)
+	RegReadBatch(regs []int) ([]uint64, error)
 	RegWrite(reg int, value uint64) error
+	RegWriteBatch(regs []int, vals []uint64) error
 	RegReadMmr(reg int) (*X86Mmr, error)
 	RegWriteMmr(reg int, value *X86Mmr) error
 	Start(begin, until uint64) error
@@ -59,10 +62,11 @@ type uc struct {
 	final  sync.Once
 }
 
-=======
-func NewUnicornModel(arch, mode int, model string) (Unicorn, error) {
-	mstr := C.CString(model)
-	defer C.free(unsafe.Pointer(mstr))
+type UcOptions struct {
+	Timeout, Count uint64
+}
+
+func Version() (int, int) {
 	var major, minor C.uint
 	C.uc_version(&major, &minor)
 	return int(major), int(minor)
@@ -92,14 +96,6 @@ func (u *uc) Close() (err error) {
 	return err
 }
 
-func NewUnicorn(arch, mode int) (Unicorn, error) {
-	return NewUnicornModel(arch, mode, "")
-}
-
-type StartOptions struct {
-	Timeout, Count uint64
-}
-
 func (u *uc) StartWithOptions(begin, until uint64, options *StartOptions) error {
 	ucerr := C.uc_emu_start(u.handle, C.uint64_t(begin), C.uint64_t(until), C.uint64_t(options.Timeout), C.size_t(options.Count))
 	return errReturn(ucerr)
@@ -123,6 +119,38 @@ func (u *uc) RegRead(reg int) (uint64, error) {
 	var val C.uint64_t
 	ucerr := C.uc_reg_read(u.handle, C.int(reg), unsafe.Pointer(&val))
 	return uint64(val), errReturn(ucerr)
+}
+
+func (u *uc) RegWriteBatch(regs []int, vals []uint64) error {
+	if len(regs) == 0 {
+		return nil
+	}
+	if len(vals) < len(regs) {
+		regs = regs[:len(vals)]
+	}
+	cregs := make([]C.int, len(regs))
+	for i, v := range regs {
+		cregs[i] = C.int(v)
+	}
+	cregs2 := (*C.int)(unsafe.Pointer(&cregs[0]))
+	cvals := (*C.uint64_t)(unsafe.Pointer(&vals[0]))
+	ucerr := C.uc_reg_write_batch_helper(u.handle, cregs2, cvals, C.int(len(regs)))
+	return errReturn(ucerr)
+}
+
+func (u *uc) RegReadBatch(regs []int) ([]uint64, error) {
+	if len(regs) == 0 {
+		return nil, nil
+	}
+	cregs := make([]C.int, len(regs))
+	for i, v := range regs {
+		cregs[i] = C.int(v)
+	}
+	cregs2 := (*C.int)(unsafe.Pointer(&cregs[0]))
+	vals := make([]uint64, len(regs))
+	cvals := (*C.uint64_t)(unsafe.Pointer(&vals[0]))
+	ucerr := C.uc_reg_read_batch_helper(u.handle, cregs2, cvals, C.int(len(regs)))
+	return vals, errReturn(ucerr)
 }
 
 func (u *uc) MemRegions() ([]*MemRegion, error) {

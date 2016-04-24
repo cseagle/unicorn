@@ -289,9 +289,7 @@ uc_err uc_close(uc_engine *uc)
     if (uc->release)
         uc->release(uc->tcg_ctx);
 
-#ifndef _WIN32
     free(uc->l1_map);
-#endif
 
     if (uc->bounce.buffer) {
         free(uc->bounce.buffer);
@@ -299,16 +297,11 @@ uc_err uc_close(uc_engine *uc)
 
     g_free(uc->tcg_ctx);
 
-    free((void*) uc->system_memory->name);
-    g_free(uc->system_memory);
     g_hash_table_destroy(uc->type_table);
 
     for (i = 0; i < DIRTY_MEMORY_NUM; i++) {
         free(uc->ram_list.dirty_memory[i]);
     }
-
-    // TODO: remove uc->root    (created with object_new())
-    uc->root->free(uc->root);
 
     // free hooks and hook lists
     for (i = 0; i < UC_HOOK_MAX; i++) {
@@ -336,10 +329,10 @@ uc_err uc_close(uc_engine *uc)
 
 
 UNICORN_EXPORT
-uc_err uc_reg_read(uc_engine *uc, int regid, void *value)
+uc_err uc_reg_read_batch(uc_engine *uc, int *ids, void **vals, int count)
 {
     if (uc->reg_read)
-        uc->reg_read(uc, regid, value);
+        uc->reg_read(uc, (unsigned int *)ids, vals, count);
     else
         return -1;  // FIXME: need a proper uc_err
 
@@ -348,14 +341,28 @@ uc_err uc_reg_read(uc_engine *uc, int regid, void *value)
 
 
 UNICORN_EXPORT
-uc_err uc_reg_write(uc_engine *uc, int regid, const void *value)
+uc_err uc_reg_write_batch(uc_engine *uc, int *ids, void *const *vals, int count)
 {
     if (uc->reg_write)
-        uc->reg_write(uc, regid, value);
+        uc->reg_write(uc, (unsigned int *)ids, vals, count);
     else
         return -1;  // FIXME: need a proper uc_err
 
     return UC_ERR_OK;
+}
+
+
+UNICORN_EXPORT
+uc_err uc_reg_read(uc_engine *uc, int regid, void *value)
+{
+    return uc_reg_read_batch(uc, &regid, &value, 1);
+}
+
+
+UNICORN_EXPORT
+uc_err uc_reg_write(uc_engine *uc, int regid, const void *value)
+{
+    return uc_reg_write_batch(uc, &regid, (void *const *)&value, 1);
 }
 
 
@@ -563,14 +570,13 @@ uc_err uc_emu_start(uc_engine* uc, uint64_t begin, uint64_t until, uint64_t time
 
     uc->addr_end = until;
 
+    if (timeout)
+        enable_emu_timer(uc, timeout * 1000);   // microseconds -> nanoseconds
+
     if (uc->vm_start(uc)) {
         return UC_ERR_RESOURCE;
     }
 
-    if (timeout)
-        enable_emu_timer(uc, timeout * 1000);   // microseconds -> nanoseconds
-
-    uc->pause_all_vcpus(uc);
     // emulation is done
     uc->emulation_done = true;
 
@@ -1033,15 +1039,19 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
 UNICORN_EXPORT
 uc_err uc_hook_del(uc_engine *uc, uc_hook hh)
 {
-    int i;
-    struct hook *hook;
-    for (i = 0; i < UC_HOOK_MAX; i++) {
-        if (list_remove(&uc->hook[i], (void *)hh)) {
-            hook = (struct hook *)hh;
-            if (--hook->refs == 0) {
-                free(hook);
+    int i = 0;
+    struct hook *hook = (struct hook *)hh;
+    int type = hook->type;
+
+    while ((type >> i) > 0 && i < UC_HOOK_MAX) {
+        if ((type >> i) & 1) {
+            if (list_remove(&uc->hook[i], (void *)hh)) {
+                if (--hook->refs == 0) {
+                    free(hook);
+                }
             }
         }
+        i++;
     }
     return UC_ERR_OK;
 }

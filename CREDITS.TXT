@@ -60,3 +60,6 @@ Ryan Hileman: Go binding
 Antonio Parata: .NET binding
 Jonathon Reinhart: C unit test
 Sascha Schirra: Ruby binding
+Adrian Herrera: Haskell binding
+practicalswift: Various cool bugs found by fuzzing
+farmdve: Memory leaking fix
