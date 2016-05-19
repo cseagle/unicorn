@@ -9,6 +9,13 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#ifdef _MSC_VER
+typedef unsigned char bool;
+#define false 0
+#define true 1
+#else
+#include <stdbool.h>
+#endif
 #include <stdarg.h>
 #if defined(UNICORN_HAS_OSXKERNEL)
 #include <libkern/libkern.h>
@@ -16,8 +23,6 @@ extern "C" {
 #include <stdlib.h>
 #include <stdio.h>
 #endif
-
-#include "platform.h"
 
 struct uc_struct;
 typedef struct uc_struct uc_engine;
