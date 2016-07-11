@@ -20,6 +20,7 @@ symbols = (
     'memory_map_ptr',
     'memory_unmap',
     'memory_free',
+    'free_code_gen_buffer',
     'helper_raise_exception',
     'tcg_enabled',
     'tcg_exec_init',
@@ -4078,7 +4079,8 @@ mips_symbols = (
     'mips_reg_read',
     'mips_reg_write',
     'mips_tcg_init',
-    'mips_cpu_list'
+    'mips_cpu_list',
+    'mips_release'
 )
 
 sparc_symbols = (
