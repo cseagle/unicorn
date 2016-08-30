@@ -74,9 +74,14 @@ To build Unicorn on *nix (such as MacOSX, Linux, *BSD, Solaris):
 
         $ UNICORN_QEMU_FLAGS="--python=/path/to/python2" ./make.sh
 
-- To cross-compile Unicorn on 64-bit OS to target 32-bit binary, run:
+- To cross-compile Unicorn on 64-bit Linux to target 32-bit binary, install
+  libglib2.0-dev for i386. On Ubuntu, this can be done with:
 
-        $ ./make.sh nix32
+        $ sudo apt-get install libglib2.0-dev:i386
+
+  Then cross-compile to 32-bit with:
+
+        $ ./make.sh linux32
 
   After compiling, install Unicorn with:
 
