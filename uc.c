@@ -1,9 +1,6 @@
 /* Unicorn Emulator Engine */
 /* By Nguyen Anh Quynh <aquynh@gmail.com>, 2015 */
 
-#if defined (WIN32) || defined (WIN64) || defined (_WIN32) || defined (_WIN64)
-#pragma warning(disable:4996)
-#endif
 #if defined(UNICORN_HAS_OSXKERNEL)
 #include <libkern/libkern.h>
 #else
@@ -160,9 +157,6 @@ uc_err uc_open(uc_arch arch, uc_mode mode, char *model, uc_engine **result)
             strncpy(uc->model, model, sizeof(uc->model) - 1);
         }
 
-        // uc->cpus = QTAILQ_HEAD_INITIALIZER(uc->cpus);
-        uc->cpus.tqh_first = NULL;
-        uc->cpus.tqh_last = &(uc->cpus.tqh_first);
         // uc->ram_list = { .blocks = QTAILQ_HEAD_INITIALIZER(ram_list.blocks) };
         uc->ram_list.blocks.tqh_first = NULL;
         uc->ram_list.blocks.tqh_last = &(uc->ram_list.blocks.tqh_first);
@@ -293,7 +287,6 @@ uc_err uc_close(uc_engine *uc)
     int i;
     struct list_item *cur;
     struct hook *hook;
-    CPUState *cpu;
 
     // Cleanup internally.
     if (uc->release)
@@ -301,11 +294,9 @@ uc_err uc_close(uc_engine *uc)
     g_free(uc->tcg_ctx);
 
     // Cleanup CPU.
-    CPU_FOREACH(cpu) {
-        g_free(cpu->tcg_as_listener);
-        g_free(cpu->thread);
-        g_free(cpu->halt_cond);
-    }
+    g_free(uc->cpu->tcg_as_listener);
+    g_free(uc->cpu->thread);
+    g_free(uc->cpu->halt_cond);
 
     // Cleanup all objects.
     OBJECT(uc->machine_state->accelerator)->ref = 1;
@@ -315,7 +306,7 @@ uc_err uc_close(uc_engine *uc)
 
     object_unref(uc, OBJECT(uc->machine_state->accelerator));
     object_unref(uc, OBJECT(uc->machine_state));
-    object_unref(uc, uc->cpu);
+    object_unref(uc, OBJECT(uc->cpu));
     object_unref(uc, OBJECT(&uc->io_mem_notdirty));
     object_unref(uc, OBJECT(&uc->io_mem_unassigned));
     object_unref(uc, OBJECT(&uc->io_mem_rom));
@@ -638,6 +629,7 @@ uc_err uc_emu_stop(uc_engine *uc)
         return UC_ERR_OK;
 
     uc->stop_request = true;
+    // TODO: make this atomic somehow?
     if (uc->current_cpu) {
         // exit the current TB
         cpu_exit(uc->current_cpu);
@@ -1081,19 +1073,19 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
 UNICORN_EXPORT
 uc_err uc_hook_del(uc_engine *uc, uc_hook hh)
 {
-    int i = 0;
+    int i;
     struct hook *hook = (struct hook *)hh;
-    int type = hook->type;
-
-    while ((type >> i) > 0 && i < UC_HOOK_MAX) {
-        if ((type >> i) & 1) {
-            if (list_remove(&uc->hook[i], (void *)hh)) {
-                if (--hook->refs == 0) {
-                    free(hook);
-                }
+    // we can't dereference hook->type if hook is invalid
+    // so for now we need to iterate over all possible types to remove the hook
+    // which is less efficient
+    // an optimization would be to align the hook pointer
+    // and store the type mask in the hook pointer.
+    for (i = 0; i < UC_HOOK_MAX; i++) {
+        if (list_remove(&uc->hook[i], (void *)hook)) {
+            if (--hook->refs == 0) {
+                free(hook);
             }
         }
-        i++;
     }
     return UC_ERR_OK;
 }
@@ -1162,5 +1154,71 @@ uc_err uc_query(uc_engine *uc, uc_query_type type, size_t *result)
             return UC_ERR_ARG;
     }
 
+    return UC_ERR_OK;
+}
+
+static size_t cpu_context_size(uc_arch arch, uc_mode mode)
+{
+    // each of these constants is defined by offsetof(CPUXYZState, tlb_table)
+    // tbl_table is the first entry in the CPU_COMMON macro, so it marks the end
+    // of the interesting CPU registers
+    switch (arch) {
+#ifdef UNICORN_HAS_M68K
+        case UC_ARCH_M68K:  return M68K_REGS_STORAGE_SIZE;
+#endif
+#ifdef UNICORN_HAS_X86
+        case UC_ARCH_X86:   return X86_REGS_STORAGE_SIZE;
+#endif
+#ifdef UNICORN_HAS_ARM
+        case UC_ARCH_ARM:   return ARM_REGS_STORAGE_SIZE;
+#endif
+#ifdef UNICORN_HAS_ARM64
+        case UC_ARCH_ARM64: return ARM64_REGS_STORAGE_SIZE;
+#endif
+#ifdef UNICORN_HAS_MIPS
+        case UC_ARCH_MIPS:  return mode & UC_MODE_MIPS64 ? MIPS64_REGS_STORAGE_SIZE : MIPS_REGS_STORAGE_SIZE;
+#endif
+#ifdef UNICORN_HAS_SPARC
+        case UC_ARCH_SPARC: return mode & UC_MODE_SPARC64 ? SPARC64_REGS_STORAGE_SIZE : SPARC_REGS_STORAGE_SIZE;
+#endif
+        default: return 0;
+    }
+}
+
+UNICORN_EXPORT
+uc_err uc_context_alloc(uc_engine *uc, uc_context **context)
+{
+    struct uc_context **_context = context;
+    size_t size = cpu_context_size(uc->arch, uc->mode);
+
+    *_context = malloc(size + sizeof(uc_context));
+    if (*_context) {
+        (*_context)->size = size;
+        return UC_ERR_OK;
+    } else {
+        return UC_ERR_NOMEM;
+    }
+}
+
+UNICORN_EXPORT
+uc_err uc_context_free(uc_context *context)
+{
+    free(context);
+    return UC_ERR_OK;
+}
+
+UNICORN_EXPORT
+uc_err uc_context_save(uc_engine *uc, uc_context *context)
+{
+    struct uc_context *_context = context;
+    memcpy(_context->data, uc->cpu->env_ptr, _context->size);
+    return UC_ERR_OK;
+}
+
+UNICORN_EXPORT
+uc_err uc_context_restore(uc_engine *uc, uc_context *context)
+{
+    struct uc_context *_context = context;
+    memcpy(uc->cpu->env_ptr, _context->data, _context->size);
     return UC_ERR_OK;
 }

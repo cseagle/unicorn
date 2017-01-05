@@ -10,14 +10,41 @@
 #include "uc_priv.h"
 
 
+const int M68K_REGS_STORAGE_SIZE = offsetof(CPUM68KState, tlb_table);
+
 static void m68k_set_pc(struct uc_struct *uc, uint64_t address)
 {
     ((CPUM68KState *)uc->current_cpu->env_ptr)->pc = address;
 }
 
+void m68k_release(void* ctx);
+void m68k_release(void* ctx)
+{
+    release_common(ctx);
+    TCGContext *tcg_ctx = (TCGContext *) ctx;
+    g_free(tcg_ctx->tb_ctx.tbs);
+    g_free(tcg_ctx->QREG_PC);
+    g_free(tcg_ctx->QREG_SR);
+    g_free(tcg_ctx->QREG_CC_OP);
+    g_free(tcg_ctx->QREG_CC_DEST);
+    g_free(tcg_ctx->QREG_CC_SRC);
+    g_free(tcg_ctx->QREG_CC_X);
+    g_free(tcg_ctx->QREG_DIV1);
+    g_free(tcg_ctx->QREG_DIV2);
+    g_free(tcg_ctx->QREG_MACSR);
+    g_free(tcg_ctx->QREG_MAC_MASK);
+    int i;
+    for (i = 0; i < 8; i++) {
+        g_free(tcg_ctx->cpu_dregs[i]);
+        g_free(tcg_ctx->cpu_aregs[i]);
+    }
+    g_free(tcg_ctx->NULL_QREG);
+    g_free(tcg_ctx->store_dummy); 
+}
+
 void m68k_reg_reset(struct uc_struct *uc)
 {
-    CPUArchState *env = first_cpu->env_ptr;
+    CPUArchState *env = uc->cpu->env_ptr;
 
     memset(env->aregs, 0, sizeof(env->aregs));
     memset(env->dregs, 0, sizeof(env->dregs));
@@ -27,7 +54,7 @@ void m68k_reg_reset(struct uc_struct *uc)
 
 int m68k_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int count)
 {
-    CPUState *mycpu = first_cpu;
+    CPUState *mycpu = uc->cpu;
     int i;
 
     for (i = 0; i < count; i++) {
@@ -52,7 +79,7 @@ int m68k_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int cou
 
 int m68k_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, int count)
 {
-    CPUState *mycpu = first_cpu;
+    CPUState *mycpu = uc->cpu;
     int i;
 
     for (i = 0; i < count; i++) {
@@ -84,6 +111,7 @@ void m68k_uc_init(struct uc_struct* uc)
     register_accel_types(uc);
     m68k_cpu_register_types(uc);
     dummy_m68k_machine_init(uc);
+    uc->release = m68k_release;
     uc->reg_read = m68k_reg_read;
     uc->reg_write = m68k_reg_write;
     uc->reg_reset = m68k_reg_reset;

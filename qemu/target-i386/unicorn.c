@@ -12,6 +12,8 @@
 #include "uc_priv.h"
 
 
+const int X86_REGS_STORAGE_SIZE = offsetof(CPUX86State, tlb_table);
+
 static void x86_set_pc(struct uc_struct *uc, uint64_t address)
 {
     ((CPUX86State *)uc->current_cpu->env_ptr)->eip = address;
@@ -46,7 +48,7 @@ void x86_release(void *ctx)
 
 void x86_reg_reset(struct uc_struct *uc)
 {
-    CPUArchState *env = first_cpu->env_ptr;
+    CPUArchState *env = uc->cpu->env_ptr;
 
     env->features[FEAT_1_EDX] = CPUID_CX8 | CPUID_CMOV | CPUID_SSE2 | CPUID_FXSR | CPUID_SSE | CPUID_CLFLUSH;
     env->features[FEAT_1_ECX] = CPUID_EXT_SSSE3 | CPUID_EXT_SSE41 | CPUID_EXT_SSE42 | CPUID_EXT_AES;
@@ -139,7 +141,7 @@ void x86_reg_reset(struct uc_struct *uc)
 
 int x86_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int count)
 {
-    CPUState *mycpu = first_cpu;
+    CPUState *mycpu = uc->cpu;
     int i;
 
     for (i = 0; i < count; i++) {
@@ -636,7 +638,7 @@ int x86_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int coun
 
 int x86_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, int count)
 {
-    CPUState *mycpu = first_cpu;
+    CPUState *mycpu = uc->cpu;
     int i;
 
     for (i = 0; i < count; i++) {

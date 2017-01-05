@@ -7,8 +7,9 @@ import (
 )
 
 /*
-#cgo CFLAGS: -O3
-#cgo LDFLAGS: -lunicorn
+#cgo CFLAGS: -O3 -Wall -Werror -I../../../include
+#cgo LDFLAGS: -L../../../ -lunicorn
+#cgo linux LDFLAGS: -L../../../ -lunicorn -lrt
 #include <unicorn/unicorn.h>
 #include "uc.h"
 */
@@ -55,6 +56,9 @@ type Unicorn interface {
 	HookDel(hook Hook) error
 	Query(queryType int) (uint64, error)
 	Close() error
+
+	ContextSave(reuse Context) (Context, error)
+	ContextRestore(Context) error
 }
 
 type uc struct {

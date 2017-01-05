@@ -10,6 +10,8 @@
 #include "uc_priv.h"
 
 
+const int ARM_REGS_STORAGE_SIZE = offsetof(CPUARMState, tlb_table);
+
 static void arm_set_pc(struct uc_struct *uc, uint64_t address)
 {
     ((CPUARMState *)uc->current_cpu->env_ptr)->pc = address;
@@ -38,7 +40,7 @@ void arm_reg_reset(struct uc_struct *uc)
     (void)uc;
     CPUArchState *env;
 
-    env = first_cpu->env_ptr;
+    env = uc->cpu->env_ptr;
     memset(env->regs, 0, sizeof(env->regs));
 
     env->pc = 0;
@@ -49,7 +51,7 @@ int arm_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int coun
     CPUState *mycpu;
     int i;
 
-    mycpu = first_cpu;
+    mycpu = uc->cpu;
 
     for (i = 0; i < count; i++) {
         unsigned int regid = regs[i];
@@ -84,7 +86,7 @@ int arm_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int coun
 
 int arm_reg_write(struct uc_struct *uc, unsigned int *regs, void* const* vals, int count)
 {
-    CPUState *mycpu = first_cpu;
+    CPUState *mycpu = uc->cpu;
     int i;
 
     for (i = 0; i < count; i++) {
@@ -96,6 +98,9 @@ int arm_reg_write(struct uc_struct *uc, unsigned int *regs, void* const* vals, i
             ARM_CPU(uc, mycpu)->env.vfp.regs[regid - UC_ARM_REG_D0] = *(float64 *)value;
         else {
             switch(regid) {
+                case UC_ARM_REG_CPSR:
+                    cpsr_write(&ARM_CPU(uc, mycpu)->env, *(uint32_t *)value, ~0);
+                    break;
                 //case UC_ARM_REG_SP:
                 case UC_ARM_REG_R13:
                     ARM_CPU(uc, mycpu)->env.regs[13] = *(uint32_t *)value;
@@ -135,7 +140,7 @@ static bool arm_stop_interrupt(int intno)
 
 static uc_err arm_query(struct uc_struct *uc, uc_query_type type, size_t *result)
 {
-    CPUState *mycpu = first_cpu;
+    CPUState *mycpu = uc->cpu;
     uint32_t mode;
 
     switch(type) {

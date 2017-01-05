@@ -3,9 +3,9 @@
 import ctypes
 import ctypes.util
 import distutils.sysconfig
+import pkg_resources
 import inspect
 import os.path
-import platform
 import sys
 
 from . import x86_const, unicorn_const as uc
@@ -17,12 +17,12 @@ _python2 = sys.version_info[0] < 3
 if _python2:
     range = xrange
 
-_lib_path = os.path.split(__file__)[0]
-_all_libs = (
-    "unicorn.dll",
-    "libunicorn.so",
-    "libunicorn.dylib",
-)
+_lib = { 'darwin': 'libunicorn.dylib',
+         'win32': 'unicorn.dll',
+         'cygwin': 'cygunicorn.dll',
+         'linux': 'libunicorn.so',
+         'linux2': 'libunicorn.so' }
+
 
 # Windows DLL in dependency order
 _all_windows_dlls = (
@@ -30,75 +30,72 @@ _all_windows_dlls = (
     "libgcc_s_seh-1.dll",
     "libgcc_s_dw2-1.dll",
     "libiconv-2.dll",
+    "libpcre-1.dll",
     "libintl-8.dll",
-    "libglib-2.0-0.dll",
 )
-_found = False
 
-for _lib in _all_libs:
+_loaded_windows_dlls = set()
+
+def _load_win_support(path):
+    for dll in _all_windows_dlls:
+        if dll in _loaded_windows_dlls:
+            continue
+
+        lib_file = os.path.join(path, dll)
+        if ('/' not in path and '\\' not in path) or os.path.exists(lib_file):
+            try:
+                #print('Trying to load Windows library', lib_file)
+                ctypes.cdll.LoadLibrary(lib_file)
+                #print('SUCCESS')
+                _loaded_windows_dlls.add(dll)
+            except OSError as e:
+                #print('FAIL to load %s' %lib_file, e)
+                continue
+
+# Initial attempt: load all dlls globally
+if sys.platform in ('win32', 'cygwin'):
+    _load_win_support('')
+
+def _load_lib(path):
     try:
-        if _lib == "unicorn.dll":
-            for dll in _all_windows_dlls:    # load all the rest DLLs first
-                _lib_file = os.path.join(_lib_path, dll)
-                if os.path.exists(_lib_file):
-                    ctypes.cdll.LoadLibrary(_lib_file)
-        _lib_file = os.path.join(_lib_path, _lib)
-        _uc = ctypes.cdll.LoadLibrary(_lib_file)
-        _found = True
-        break
-    except OSError:
-        pass
+        if sys.platform in ('win32', 'cygwin'):
+            _load_win_support(path)
 
-if not _found:
-    # try loading from default paths
-    for _lib in _all_libs:
-        try:
-            _uc = ctypes.cdll.LoadLibrary(_lib)
-            _found = True
-            break
-        except OSError:
-            pass
+        lib_file = os.path.join(path, _lib.get(sys.platform, 'libunicorn.so'))
+        #print('Trying to load shared library', lib_file)
+        dll = ctypes.cdll.LoadLibrary(lib_file)
+        #print('SUCCESS')
+        return dll
+    except OSError as e:
+        #print('FAIL to load %s' %lib_file, e)
+        return None
 
-if not _found:
-    # last try: loading from python lib directory
-    _lib_path = distutils.sysconfig.get_python_lib()
-    for _lib in _all_libs:
-        try:
-            if _lib == "unicorn.dll":
-                for dll in _all_windows_dlls:    # load all the rest DLLs first
-                    _lib_file = os.path.join(_lib_path, "unicorn", dll)
-                    if os.path.exists(_lib_file):
-                        ctypes.cdll.LoadLibrary(_lib_file)
-            _lib_file = os.path.join(_lib_path, "unicorn", _lib)
-            _uc = ctypes.cdll.LoadLibrary(_lib_file)
-            _found = True
-            break
-        except OSError:
-            pass
+_uc = None
 
-if not _found:
-    # Attempt Darwin specific load (10.11 specific),
-    # since LD_LIBRARY_PATH is not guaranteed to exist
-    if platform.system() == "Darwin":
-        _lib_path = "/usr/local/lib/"
-    elif platform.system() == "Linux":
-        _lib_path = "/usr/lib64/"
+# Loading attempts, in order
+# - pkg_resources can get us the path to the local libraries
+# - we can get the path to the local libraries by parsing our filename
+# - global load
+# - python's lib directory
+# - last-gasp attempt at some hardcoded paths on darwin and linux
 
-    for _lib in _all_libs:
-        try:
-            _lib_file = os.path.join(_lib_path, _lib)
-            # print "Trying to load:", _lib_file
-            _uc = ctypes.cdll.LoadLibrary(_lib_file)
-            _found = True
-            break
-        except OSError:
-            pass
+_path_list = [pkg_resources.resource_filename(__name__, 'lib'),
+              os.path.join(os.path.split(__file__)[0], 'lib'),
+              '',
+              distutils.sysconfig.get_python_lib(),
+              "/usr/local/lib/" if sys.platform == 'darwin' else '/usr/lib64',
+              os.environ['PATH']]
 
-if not _found:
+#print(_path_list)
+#print("-" * 80)
+
+for _path in _path_list:
+    _uc = _load_lib(_path)
+    if _uc is not None: break
+else:
     raise ImportError("ERROR: fail to load the dynamic library.")
 
-
-__version__ = "%s.%s" % (uc.UC_API_MAJOR, uc.UC_API_MINOR)
+__version__ = "%u.%u.%u" % (uc.UC_VERSION_MAJOR, uc.UC_VERSION_MINOR, uc.UC_VERSION_EXTRA)
 
 # setup all the function prototype
 def _setup_prototype(lib, fname, restype, *argtypes):
@@ -107,6 +104,7 @@ def _setup_prototype(lib, fname, restype, *argtypes):
 
 ucerr = ctypes.c_int
 uc_engine = ctypes.c_void_p
+uc_context = ctypes.c_void_p
 uc_hook_h = ctypes.c_size_t
 
 _setup_prototype(_uc, "uc_version", ctypes.c_uint, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int))
@@ -127,6 +125,10 @@ _setup_prototype(_uc, "uc_mem_map_ptr", ucerr, uc_engine, ctypes.c_uint64, ctype
 _setup_prototype(_uc, "uc_mem_unmap", ucerr, uc_engine, ctypes.c_uint64, ctypes.c_size_t)
 _setup_prototype(_uc, "uc_mem_protect", ucerr, uc_engine, ctypes.c_uint64, ctypes.c_size_t, ctypes.c_uint32)
 _setup_prototype(_uc, "uc_query", ucerr, uc_engine, ctypes.c_uint32, ctypes.POINTER(ctypes.c_size_t))
+_setup_prototype(_uc, "uc_context_alloc", ucerr, uc_engine, ctypes.POINTER(uc_context))
+_setup_prototype(_uc, "uc_context_free", ucerr, uc_context)
+_setup_prototype(_uc, "uc_context_save", ucerr, uc_engine, uc_context)
+_setup_prototype(_uc, "uc_context_restore", ucerr, uc_engine, uc_context)
 
 # uc_hook_add is special due to variable number of arguments
 _uc.uc_hook_add = _uc.uc_hook_add
@@ -276,7 +278,7 @@ class Uc(object):
                 return reg.low_qword | (reg.high_qword << 64)
 
         # read to 64bit number to be safe
-        reg = ctypes.c_int64(0)
+        reg = ctypes.c_uint64(0)
         status = _uc.uc_reg_read(self._uch, reg_id, ctypes.byref(reg))
         if status != uc.UC_ERR_OK:
             raise UcError(status)
@@ -305,7 +307,7 @@ class Uc(object):
 
         if reg is None:
             # convert to 64bit number to be safe
-            reg = ctypes.c_int64(value)
+            reg = ctypes.c_uint64(value)
 
         status = _uc.uc_reg_write(self._uch, reg_id, ctypes.byref(reg))
         if status != uc.UC_ERR_OK:
@@ -467,6 +469,36 @@ class Uc(object):
             raise UcError(status)
         h = 0
 
+    def context_save(self):
+        ptr = ctypes.cast(0, ctypes.c_voidp)
+        status = _uc.uc_context_alloc(self._uch, ctypes.byref(ptr))
+        if status != uc.UC_ERR_OK:
+            raise UcError(status)
+
+        status = _uc.uc_context_save(self._uch, ptr)
+        if status != uc.UC_ERR_OK:
+            raise UcError(status)
+
+        return SavedContext(ptr)
+
+    def context_update(self, context):
+        status = _uc.uc_context_save(self._uch, context.pointer)
+        if status != uc.UC_ERR_OK:
+            raise UcError(status)
+
+    def context_restore(self, context):
+        status = _uc.uc_context_restore(self._uch, context.pointer)
+        if status != uc.UC_ERR_OK:
+            raise UcError(status)
+
+class SavedContext(object):
+    def __init__(self, pointer):
+        self.pointer = pointer
+
+    def __del__(self):
+        status = _uc.uc_context_free(self.pointer)
+        if status != uc.UC_ERR_OK:
+            raise UcError(status)
 
 # print out debugging info
 def debug():

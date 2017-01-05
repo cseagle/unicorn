@@ -9,6 +9,14 @@
 #include "unicorn_common.h"
 #include "uc_priv.h"
 
+// prevent the lines from being compiled twice
+#ifdef TARGET_WORDS_BIGENDIAN
+#ifdef TARGET_MIPS64
+const int MIPS64_REGS_STORAGE_SIZE = offsetof(CPUMIPSState, tlb_table);
+#else // MIPS32
+const int MIPS_REGS_STORAGE_SIZE = offsetof(CPUMIPSState, tlb_table);
+#endif
+#endif
 
 static uint64_t mips_mem_redirect(uint64_t address)
 {
@@ -61,7 +69,7 @@ void mips_release(void *ctx)
 void mips_reg_reset(struct uc_struct *uc)
 {
     (void)uc;
-    CPUArchState *env = first_cpu->env_ptr;
+    CPUArchState *env = uc->cpu->env_ptr;
     memset(env->active_tc.gpr, 0, sizeof(env->active_tc.gpr));
 
     env->active_tc.PC = 0;
@@ -69,7 +77,7 @@ void mips_reg_reset(struct uc_struct *uc)
 
 int mips_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int count)
 {
-    CPUState *mycpu = first_cpu;
+    CPUState *mycpu = uc->cpu;
     int i;
 
     for (i = 0; i < count; i++) {
@@ -92,7 +100,7 @@ int mips_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int cou
 
 int mips_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, int count)
 {
-    CPUState *mycpu = first_cpu;
+    CPUState *mycpu = uc->cpu;
     int i;
 
     for (i = 0; i < count; i++) {

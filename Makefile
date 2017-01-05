@@ -8,9 +8,9 @@ include config.mk
 include pkgconfig.mk	# package version
 
 LIBNAME = unicorn
+UNAME_S := $(shell uname -s)
 
-GENOBJ = $(shell find qemu/$(1) -name "*.o" 2>/dev/null) $(wildcard qemu/util/*.o) $(wildcard qemu/*.o) $(wildcard qemu/qom/*.o)\
-		 $(wildcard qemu/hw/core/*.o) $(wildcard qemu/qapi/*.o) $(wildcard qemu/qobject/*.o)
+GENOBJ = $(shell find qemu/$(1) -name "*.o" 2>/dev/null) 
 
 ifneq (,$(findstring x86,$(UNICORN_ARCHS)))
 	UC_TARGET_OBJ += $(call GENOBJ,x86_64-softmmu)
@@ -58,10 +58,14 @@ UNICORN_CFLAGS += -fPIC
 # Verbose output?
 V ?= 0
 
+# on MacOS, compile in Universal format by default
+MACOS_UNIVERSAL ?= yes
+
 ifeq ($(UNICORN_DEBUG),yes)
 CFLAGS += -g
 else
 CFLAGS += -O3
+UNICORN_QEMU_FLAGS += --disable-debug-info
 endif
 
 ifeq ($(UNICORN_ASAN),yes)
@@ -81,12 +85,6 @@ CC = $(CROSS)-gcc
 AR = $(CROSS)-ar
 RANLIB = $(CROSS)-ranlib
 STRIP = $(CROSS)-strip
-GLIB = "-L/usr/$(CROSS)/lib/ -lglib-2.0"
-endif
-
-# Find GLIB
-ifndef GLIB
-GLIB = `pkg-config --libs glib-2.0`
 endif
 
 ifeq ($(PKG_EXTRA),)
@@ -96,71 +94,68 @@ PKG_VERSION = $(PKG_MAJOR).$(PKG_MINOR).$(PKG_EXTRA)
 endif
 
 API_MAJOR=$(shell echo `grep -e UC_API_MAJOR include/unicorn/unicorn.h | grep -v = | awk '{print $$3}'` | awk '{print $$1}')
-VERSION_EXT =
 
-BIN_EXT =
-
-IS_APPLE := $(shell $(CC) -dM -E - < /dev/null | grep -cm 1 -e __apple_build_version__ -e __APPLE_CC__)
-ifeq ($(IS_APPLE),1)
+# Apple?
+ifeq ($(UNAME_S),Darwin)
 EXT = dylib
 VERSION_EXT = $(API_MAJOR).$(EXT)
 $(LIBNAME)_LDFLAGS += -dynamiclib -install_name lib$(LIBNAME).$(VERSION_EXT) -current_version $(PKG_MAJOR).$(PKG_MINOR).$(PKG_EXTRA) -compatibility_version $(PKG_MAJOR).$(PKG_MINOR)
-ifeq ($(MACOS_UNIVERSAL),yes)
-$(LIBNAME)_LDFLAGS += -m32 -arch i386 -m64 -arch x86_64
-endif
 AR_EXT = a
 UNICORN_CFLAGS += -fvisibility=hidden
+
 ifeq ($(MACOS_UNIVERSAL),yes)
+$(LIBNAME)_LDFLAGS += -m32 -arch i386 -m64 -arch x86_64
 UNICORN_CFLAGS += -m32 -arch i386 -m64 -arch x86_64
 endif
-else
+
 # Cygwin?
-IS_CYGWIN := $(shell $(CC) -dumpmachine | grep -i cygwin | wc -l)
-ifeq ($(IS_CYGWIN),1)
+else ifneq ($(filter CYGWIN%,$(UNAME_S)),)
 EXT = dll
 AR_EXT = a
 BIN_EXT = .exe
 UNICORN_CFLAGS := $(UNICORN_CFLAGS:-fPIC=)
 #UNICORN_QEMU_FLAGS += --disable-stack-protector
-else
+
 # mingw?
-IS_MINGW := $(shell $(CC) --version | grep -i mingw | wc -l)
-ifeq ($(IS_MINGW),1)
+else ifneq ($(filter MINGW%,$(UNAME_S)),)
 EXT = dll
-AR_EXT = lib
+AR_EXT = a
 BIN_EXT = .exe
+UNICORN_QEMU_FLAGS += --disable-stack-protector
+UNICORN_CFLAGS := $(UNICORN_CFLAGS:-fPIC=)
+$(LIBNAME)_LDFLAGS += -Wl,--output-def,unicorn.def
+DO_WINDOWS_EXPORT = 1
+
+# Linux, Darwin
 else
-# Linux, *BSD
 EXT = so
 VERSION_EXT = $(EXT).$(API_MAJOR)
 AR_EXT = a
 $(LIBNAME)_LDFLAGS += -Wl,-Bsymbolic-functions,-soname,lib$(LIBNAME).$(VERSION_EXT)
 UNICORN_CFLAGS += -fvisibility=hidden
 endif
-endif
-endif
 
 ifeq ($(UNICORN_SHARED),yes)
-ifeq ($(IS_MINGW),1)
-LIBRARY = $(BLDIR)/$(LIBNAME).$(EXT)
-else ifeq ($(IS_CYGWIN),1)
-LIBRARY = $(BLDIR)/cyg$(LIBNAME).$(EXT)
-LIBRARY_DLLA = $(BLDIR)/lib$(LIBNAME).$(EXT).$(AR_EXT)
+ifneq ($(filter MINGW%,$(UNAME_S)),)
+LIBRARY = $(LIBNAME).$(EXT)
+else ifneq ($(filter CYGWIN%,$(UNAME_S)),)
+LIBRARY = cyg$(LIBNAME).$(EXT)
+LIBRARY_DLLA = lib$(LIBNAME).$(EXT).$(AR_EXT)
 $(LIBNAME)_LDFLAGS += -Wl,--out-implib=$(LIBRARY_DLLA)
 $(LIBNAME)_LDFLAGS += -lssp
-else	# *nix
-LIBRARY = $(BLDIR)/lib$(LIBNAME).$(VERSION_EXT)
-LIBRARY_SYMLINK = $(BLDIR)/lib$(LIBNAME).$(EXT)
+# Linux, Darwin
+else
+LIBRARY = lib$(LIBNAME).$(VERSION_EXT)
+LIBRARY_SYMLINK = lib$(LIBNAME).$(EXT)
 endif
 endif
 
 ifeq ($(UNICORN_STATIC),yes)
-ifeq ($(IS_MINGW),1)
-ARCHIVE = $(BLDIR)/$(LIBNAME).$(AR_EXT)
-else ifeq ($(IS_CYGWIN),1)
-ARCHIVE = $(BLDIR)/lib$(LIBNAME).$(AR_EXT)
+ifneq ($(filter MINGW%,$(UNAME_S)),)
+ARCHIVE = $(LIBNAME).$(AR_EXT)
+# Cygwin, Linux, Darwin
 else
-ARCHIVE = $(BLDIR)/lib$(LIBNAME).$(AR_EXT)
+ARCHIVE = lib$(LIBNAME).$(AR_EXT)
 endif
 endif
 
@@ -170,9 +165,6 @@ INSTALL_LIB ?= $(INSTALL_BIN) -m0755
 PKGCFGF = $(LIBNAME).pc
 PREFIX ?= /usr
 DESTDIR ?=
-BLDIR = .
-OBJDIR = .
-UNAME_S := $(shell uname -s)
 
 LIBDIRARCH ?= lib
 # Uncomment the below line to installs x86_64 libs to lib64/ directory.
@@ -190,10 +182,9 @@ LIBDATADIR ?= $(LIBDIR)
 
 ifndef USE_GENERIC_LIBDATADIR
 ifeq ($(UNAME_S), FreeBSD)
-LIBDATADIR = $(DESTDIR)$(PREFIX)/libdata
-endif
-ifeq ($(UNAME_S), DragonFly)
-LIBDATADIR = $(DESTDIR)$(PREFIX)/libdata
+LIBDATADIR = $(PREFIX)/libdata
+else ifeq ($(UNAME_S), DragonFly)
+LIBDATADIR = $(PREFIX)/libdata
 endif
 endif
 
@@ -203,84 +194,65 @@ else
 PKGCFGDIR ?= $(LIBDATADIR)/pkgconfig
 endif
 
-all: compile_lib
-ifeq (,$(findstring yes,$(UNICORN_BUILD_CORE_ONLY)))
-ifeq ($(UNICORN_SHARED),yes)
-ifeq ($(V),0)
-	@$(INSTALL_LIB) $(LIBRARY) $(BLDIR)/samples/
-else
-	$(INSTALL_LIB) $(LIBRARY) $(BLDIR)/samples/
-endif
-endif
+$(LIBNAME)_LDFLAGS += -lm
 
-ifndef BUILDDIR
-	@cd samples && $(MAKE)
-else
-	@cd samples && $(MAKE) BUILDDIR=$(BLDIR)
-endif
-endif
-
-config:
-	if [ "$(UNICORN_ARCHS)" != "`cat config.log`" ]; then $(MAKE) clean; fi
+.PHONY: all
+all: unicorn
+	$(MAKE) -C samples
 
 qemu/config-host.h-timestamp:
-ifeq ($(UNICORN_DEBUG),yes)
 	cd qemu && \
 	./configure --cc="${CC}" --extra-cflags="$(UNICORN_CFLAGS)" --target-list="$(UNICORN_TARGETS)" ${UNICORN_QEMU_FLAGS}
 	printf "$(UNICORN_ARCHS)" > config.log
-else
-	cd qemu && \
-	./configure --cc="${CC}" --disable-debug-info --extra-cflags="$(UNICORN_CFLAGS)" --target-list="$(UNICORN_TARGETS)" ${UNICORN_QEMU_FLAGS}
-	printf "$(UNICORN_ARCHS)" > config.log
-endif
-
-compile_lib: config qemu/config-host.h-timestamp
-	cd qemu && $(MAKE) -j 4
-	$(MAKE) unicorn
+	$(MAKE) -C qemu -j 4
+	$(eval UC_TARGET_OBJ += $$(wildcard qemu/util/*.o) $$(wildcard qemu/*.o) $$(wildcard qemu/qom/*.o) $$(wildcard qemu/hw/core/*.o) $$(wildcard qemu/qapi/*.o) $$(wildcard qemu/qobject/*.o))
 
 unicorn: $(LIBRARY) $(ARCHIVE)
 
-$(LIBRARY): $(UC_TARGET_OBJ) uc.o list.o
+$(LIBRARY): qemu/config-host.h-timestamp
 ifeq ($(UNICORN_SHARED),yes)
 ifeq ($(V),0)
 	$(call log,GEN,$(LIBRARY))
-	@$(CC) $(CFLAGS) -shared $^ -o $(LIBRARY) $(GLIB) -lm $($(LIBNAME)_LDFLAGS)
+	@$(CC) $(CFLAGS) -shared $(UC_TARGET_OBJ) uc.o list.o -o $(LIBRARY) $($(LIBNAME)_LDFLAGS)
+	@-ln -sf $(LIBRARY) $(LIBRARY_SYMLINK)
 else
-	$(CC) $(CFLAGS) -shared $^ -o $(LIBRARY) $(GLIB) -lm $($(LIBNAME)_LDFLAGS)
+	$(CC) $(CFLAGS) -shared $(UC_TARGET_OBJ) uc.o list.o -o $(LIBRARY) $($(LIBNAME)_LDFLAGS)
+	-ln -sf $(LIBRARY) $(LIBRARY_SYMLINK)
 endif
-ifneq (,$(LIBRARY_SYMLINK))
-	@ln -sf $(LIBRARY) $(LIBRARY_SYMLINK)
+ifeq ($(DO_WINDOWS_EXPORT),1)
+ifneq ($(filter MINGW32%,$(UNAME_S)),)
+	cmd /c "windows_export.bat x86"
+else
+	cmd /c "windows_export.bat x64"
+endif
 endif
 endif
 
-$(ARCHIVE): $(UC_TARGET_OBJ) uc.o list.o
+$(ARCHIVE): qemu/config-host.h-timestamp
 ifeq ($(UNICORN_STATIC),yes)
 ifeq ($(V),0)
 	$(call log,GEN,$(ARCHIVE))
-	@$(create-archive)
+	@$(AR) q $(ARCHIVE) $(UC_TARGET_OBJ) uc.o list.o
+	@$(RANLIB) $(ARCHIVE)
 else
-	$(create-archive)
+	$(AR) q $(ARCHIVE) $(UC_TARGET_OBJ) uc.o list.o
+	$(RANLIB) $(ARCHIVE)
 endif
 endif
-
 
 $(PKGCFGF):
-ifeq ($(V),0)
-	$(call log,GEN,$(@:$(BLDIR)/%=%))
-	@$(generate-pkgcfg)
-else
 	$(generate-pkgcfg)
-endif
-
 
 .PHONY: test
 test: all
 	$(MAKE) -C tests/unit test
+	$(MAKE) -C tests/regress test
+	$(MAKE) -C bindings test
 
-install: compile_lib $(PKGCFGF)
+install: qemu/config-host.h-timestamp $(PKGCFGF)
 	mkdir -p $(DESTDIR)$(LIBDIR)
 ifeq ($(UNICORN_SHARED),yes)
-ifeq ($(IS_CYGWIN),1)
+ifneq ($(filter CYGWIN%,$(UNAME_S)),)
 	$(INSTALL_LIB) $(LIBRARY) $(DESTDIR)$(BINDIR)
 	$(INSTALL_DATA) $(LIBRARY_DLLA) $(DESTDIR)$(LIBDIR)
 else
@@ -307,12 +279,17 @@ else
 DIST_VERSION = $(TAG)
 endif
 
+bindings: qemu/config-host.h-timestamp
+	$(MAKE) -C bindings build
+	$(MAKE) -C bindings samples
+
 dist:
 	git archive --format=tar.gz --prefix=unicorn-$(DIST_VERSION)/ $(TAG) > unicorn-$(DIST_VERSION).tgz
 	git archive --format=zip --prefix=unicorn-$(DIST_VERSION)/ $(TAG) > unicorn-$(DIST_VERSION).zip
 
 
-header: FORCE
+# run "make header" whenever qemu/header_gen.py is modified
+header:
 	$(eval TARGETS := m68k arm aarch64 mips mipsel mips64 mips64el\
 		powerpc sparc sparc64 x86_64)
 	$(foreach var,$(TARGETS),\
@@ -330,16 +307,9 @@ uninstall:
 clean:
 	$(MAKE) -C qemu clean
 	rm -rf *.d *.o
-	rm -rf lib$(LIBNAME)* $(LIBNAME)*.lib $(LIBNAME)*.dll cyg$(LIBNAME)*.dll
-ifeq (,$(findstring yes,$(UNICORN_BUILD_CORE_ONLY)))
-	cd samples && $(MAKE) clean
-	rm -f $(BLDIR)/samples/lib$(LIBNAME).$(EXT)
-endif
+	rm -rf lib$(LIBNAME)* $(LIBNAME)*.lib $(LIBNAME)*.dll $(LIBNAME)*.exp cyg$(LIBNAME)*.dll
+	$(MAKE) -C samples clean
 	$(MAKE) -C tests/unit clean
-
-ifdef BUILDDIR
-	rm -rf $(BUILDDIR)
-endif
 
 
 define generate-pkgcfg
@@ -358,10 +328,3 @@ define log
 	@printf "  %-7s %s\n" "$(1)" "$(2)"
 endef
 
-
-define create-archive
-	$(AR) q $(ARCHIVE) $^
-	$(RANLIB) $(ARCHIVE)
-endef
-
-FORCE:
