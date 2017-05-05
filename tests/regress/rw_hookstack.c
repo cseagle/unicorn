@@ -1,8 +1,5 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <inttypes.h>
 #include <unicorn/unicorn.h>
 
 #define ADDRESS 0x1000000

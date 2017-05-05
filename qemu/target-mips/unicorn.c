@@ -9,13 +9,16 @@
 #include "unicorn_common.h"
 #include "uc_priv.h"
 
-// prevent the lines from being compiled twice
-#ifdef TARGET_WORDS_BIGENDIAN
 #ifdef TARGET_MIPS64
 const int MIPS64_REGS_STORAGE_SIZE = offsetof(CPUMIPSState, tlb_table);
 #else // MIPS32
 const int MIPS_REGS_STORAGE_SIZE = offsetof(CPUMIPSState, tlb_table);
 #endif
+
+#ifdef TARGET_MIPS64
+typedef uint64_t mipsreg_t;
+#else
+typedef uint32_t mipsreg_t;
 #endif
 
 static uint64_t mips_mem_redirect(uint64_t address)
@@ -42,10 +45,11 @@ static void mips_set_pc(struct uc_struct *uc, uint64_t address)
 void mips_release(void *ctx);
 void mips_release(void *ctx)
 {
+    MIPSCPU* cpu;
     int i;
     TCGContext *tcg_ctx = (TCGContext *) ctx;
     release_common(ctx);
-    MIPSCPU* cpu = MIPS_CPU(tcg_ctx->uc, tcg_ctx->uc->cpu);
+    cpu = MIPS_CPU(tcg_ctx->uc, tcg_ctx->uc->cpu);
     g_free(cpu->env.tlb);
     g_free(cpu->env.mvp);
 
@@ -68,8 +72,9 @@ void mips_release(void *ctx)
 
 void mips_reg_reset(struct uc_struct *uc)
 {
+    CPUArchState *env;
     (void)uc;
-    CPUArchState *env = uc->cpu->env_ptr;
+    env = uc->cpu->env_ptr;
     memset(env->active_tc.gpr, 0, sizeof(env->active_tc.gpr));
 
     env->active_tc.PC = 0;
@@ -84,12 +89,12 @@ int mips_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int cou
         unsigned int regid = regs[i];
         void *value = vals[i];
         if (regid >= UC_MIPS_REG_0 && regid <= UC_MIPS_REG_31)
-            *(int32_t *)value = MIPS_CPU(uc, mycpu)->env.active_tc.gpr[regid - UC_MIPS_REG_0];
+            *(mipsreg_t *)value = MIPS_CPU(uc, mycpu)->env.active_tc.gpr[regid - UC_MIPS_REG_0];
         else {
             switch(regid) {
                 default: break;
                 case UC_MIPS_REG_PC:
-                         *(int32_t *)value = MIPS_CPU(uc, mycpu)->env.active_tc.PC;
+                         *(mipsreg_t *)value = MIPS_CPU(uc, mycpu)->env.active_tc.PC;
                          break;
             }
         }
@@ -107,12 +112,12 @@ int mips_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, 
         unsigned int regid = regs[i];
         const void *value = vals[i];
         if (regid >= UC_MIPS_REG_0 && regid <= UC_MIPS_REG_31)
-            MIPS_CPU(uc, mycpu)->env.active_tc.gpr[regid - UC_MIPS_REG_0] = *(uint32_t *)value;
+            MIPS_CPU(uc, mycpu)->env.active_tc.gpr[regid - UC_MIPS_REG_0] = *(mipsreg_t *)value;
         else {
             switch(regid) {
                 default: break;
                 case UC_MIPS_REG_PC:
-                         MIPS_CPU(uc, mycpu)->env.active_tc.PC = *(uint32_t *)value;
+                         MIPS_CPU(uc, mycpu)->env.active_tc.PC = *(mipsreg_t *)value;
                          // force to quit execution and flush TB
                          uc->quit_request = true;
                          uc_emu_stop(uc);
@@ -124,7 +129,7 @@ int mips_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, 
     return 0;
 }
 
-__attribute__ ((visibility ("default")))
+DEFAULT_VISIBILITY
 #ifdef TARGET_MIPS64
 #ifdef TARGET_WORDS_BIGENDIAN
   void mips64_uc_init(struct uc_struct* uc)

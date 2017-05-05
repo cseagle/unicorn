@@ -1,4 +1,8 @@
-We also show steps to cross-compile Unicorn for Microsoft Windows.
+To build Unicorn on Windows natively using Visual Studio, see docs under "msvc"
+directory in root directory.
+
+The rest of this manual shows how to cross-compile Unicorn for Windows using
+either MingW or Msys2.
 
 To compile for Linux, Mac OS X and Unix-based OS, see [COMPILE-NIX.md](COMPILE-NIX.md)
 
@@ -81,6 +85,9 @@ For each option, refer to docs/README for more details.
 [2] Compile from source on Windows - with MinGW (MSYS2)
 
 To compile with MinGW, install MSYS2 as instructed in the first section.
+
+Note: After MSYS2 is installed, you will have 3 shortcuts to open the command prompt: "MSYS2 MSYS", "MSYS2 MinGW-32 bit" and "MSYS2 MinGW 64-bit". Use the MinGW shortcut so that compilation succeeds.
+
 Then, build Unicorn with the next steps:
 
 - To compile Windows 32-bit binary with MinGW, run:

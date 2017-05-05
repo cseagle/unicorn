@@ -1,5 +1,3 @@
-#include <unistd.h>
-#include <inttypes.h>
 #include <unicorn/unicorn.h>
 
 #include "unicorn_test.h"

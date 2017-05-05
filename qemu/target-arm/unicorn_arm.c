@@ -9,7 +9,6 @@
 #include "unicorn_common.h"
 #include "uc_priv.h"
 
-
 const int ARM_REGS_STORAGE_SIZE = offsetof(CPUARMState, tlb_table);
 
 static void arm_set_pc(struct uc_struct *uc, uint64_t address)
@@ -22,11 +21,13 @@ void arm_release(void* ctx);
 
 void arm_release(void* ctx)
 {
+    ARMCPU* cpu;
+    struct uc_struct* uc;
     TCGContext *s = (TCGContext *) ctx;
 
     g_free(s->tb_ctx.tbs);
-    struct uc_struct* uc = s->uc;
-    ARMCPU* cpu = (ARMCPU*) uc->cpu;
+    uc = s->uc;
+    cpu = (ARMCPU*) uc->cpu;
     g_free(cpu->cpreg_indexes);
     g_free(cpu->cpreg_values);
     g_free(cpu->cpreg_vmstate_indexes);
@@ -37,8 +38,8 @@ void arm_release(void* ctx)
 
 void arm_reg_reset(struct uc_struct *uc)
 {
-    (void)uc;
     CPUArchState *env;
+    (void)uc;
 
     env = uc->cpu->env_ptr;
     memset(env->regs, 0, sizeof(env->regs));
@@ -62,6 +63,9 @@ int arm_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int coun
             *(float64 *)value = ARM_CPU(uc, mycpu)->env.vfp.regs[regid - UC_ARM_REG_D0];
         else {
             switch(regid) {
+                case UC_ARM_REG_APSR:
+                    *(int32_t *)value = cpsr_read(&ARM_CPU(uc, mycpu)->env) & CPSR_NZCV;
+                    break;
                 case UC_ARM_REG_CPSR:
                     *(int32_t *)value = cpsr_read(&ARM_CPU(uc, mycpu)->env);
                     break;
@@ -107,6 +111,9 @@ int arm_reg_write(struct uc_struct *uc, unsigned int *regs, void* const* vals, i
             ARM_CPU(uc, mycpu)->env.vfp.regs[regid - UC_ARM_REG_D0] = *(float64 *)value;
         else {
             switch(regid) {
+                case UC_ARM_REG_APSR:
+                    cpsr_write(&ARM_CPU(uc, mycpu)->env, *(uint32_t *)value, CPSR_NZCV);
+                    break;
                 case UC_ARM_REG_CPSR:
                     cpsr_write(&ARM_CPU(uc, mycpu)->env, *(uint32_t *)value, ~0);
                     break;
@@ -175,7 +182,11 @@ static uc_err arm_query(struct uc_struct *uc, uc_query_type type, size_t *result
     }
 }
 
+#ifdef TARGET_WORDS_BIGENDIAN
+void armeb_uc_init(struct uc_struct* uc)
+#else
 void arm_uc_init(struct uc_struct* uc)
+#endif
 {
     register_accel_types(uc);
     arm_cpu_register_types(uc);

@@ -19,9 +19,7 @@
  */
 
 #define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 #include <string.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

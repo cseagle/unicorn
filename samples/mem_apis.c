@@ -20,30 +20,8 @@
 
 #define __STDC_FORMAT_MACROS
 
-// windows specific includes
-#ifdef _MSC_VER
-#include <io.h>
-#include <windows.h>
-#define PRIx64 "llX"
-#ifdef DYNLOAD
-#include "unicorn_dynload.h"
-#else // DYNLOAD
-#include <unicorn/unicorn.h>
-#ifdef _WIN64
-#pragma comment(lib, "unicorn_staload64.lib")
-#else // _WIN64
-#pragma comment(lib, "unicorn_staload.lib")
-#endif // _WIN64
-#endif // DYNLOAD
 
-// posix specific includes
-#else // _MSC_VER
-#include <unistd.h>
-#include <inttypes.h>
 #include <unicorn/unicorn.h>
-#endif // _MSC_VER
-
-// common includes
 #include <string.h>
 #include <stdlib.h>
 #include <string.h>
@@ -359,7 +337,7 @@ static void unmap_test()
 
 int main(int argc, char **argv, char **envp)
 {
-	// dynamically load shared library
+    // dynamically load shared library
 #ifdef DYNLOAD
     if (!uc_dyn_load(NULL, 0)) {
         printf("Error dynamically loading shared library.\n");
@@ -370,7 +348,7 @@ int main(int argc, char **argv, char **envp)
     }
 #endif
     
-	nx_test();
+    nx_test();
     perms_test();
     unmap_test();
 
@@ -379,5 +357,5 @@ int main(int argc, char **argv, char **envp)
     uc_dyn_free();
 #endif
     
-	return 0;
+    return 0;
 }

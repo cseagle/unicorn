@@ -9,6 +9,13 @@ include pkgconfig.mk	# package version
 
 LIBNAME = unicorn
 UNAME_S := $(shell uname -s)
+# SMP_MFLAGS is used for controlling the amount of parallelism used
+# in external 'make' invocations. If the user doesn't override it, it
+# does "-j4". That is, it uses 4 job threads. If you want to use more or less,
+# pass in a different -jX, with X being the number of threads.
+# For example, to completely disable parallel building, pass "-j1".
+# If you want to use 16 job threads, use "-j16".
+SMP_MFLAGS := -j4
 
 GENOBJ = $(shell find qemu/$(1) -name "*.o" 2>/dev/null) 
 
@@ -19,8 +26,11 @@ ifneq (,$(findstring x86,$(UNICORN_ARCHS)))
 endif
 ifneq (,$(findstring arm,$(UNICORN_ARCHS)))
 	UC_TARGET_OBJ += $(call GENOBJ,arm-softmmu)
+	UC_TARGET_OBJ += $(call GENOBJ,armeb-softmmu)
 	UNICORN_CFLAGS += -DUNICORN_HAS_ARM
+	UNICORN_CFLAGS += -DUNICORN_HAS_ARMEB
 	UNICORN_TARGETS += arm-softmmu,
+	UNICORN_TARGETS += armeb-softmmu,
 endif
 ifneq (,$(findstring m68k,$(UNICORN_ARCHS)))
 	UC_TARGET_OBJ += $(call GENOBJ,m68k-softmmu)
@@ -29,8 +39,11 @@ ifneq (,$(findstring m68k,$(UNICORN_ARCHS)))
 endif
 ifneq (,$(findstring aarch64,$(UNICORN_ARCHS)))
 	UC_TARGET_OBJ += $(call GENOBJ,aarch64-softmmu)
+	UC_TARGET_OBJ += $(call GENOBJ,aarch64eb-softmmu)
 	UNICORN_CFLAGS += -DUNICORN_HAS_ARM64
+	UNICORN_CFLAGS += -DUNICORN_HAS_ARM64EB
 	UNICORN_TARGETS += aarch64-softmmu,
+	UNICORN_TARGETS += aarch64eb-softmmu,
 endif
 ifneq (,$(findstring mips,$(UNICORN_ARCHS)))
 	UC_TARGET_OBJ += $(call GENOBJ,mips-softmmu)
@@ -204,7 +217,7 @@ qemu/config-host.h-timestamp:
 	cd qemu && \
 	./configure --cc="${CC}" --extra-cflags="$(UNICORN_CFLAGS)" --target-list="$(UNICORN_TARGETS)" ${UNICORN_QEMU_FLAGS}
 	printf "$(UNICORN_ARCHS)" > config.log
-	$(MAKE) -C qemu -j 4
+	$(MAKE) -C qemu $(SMP_MFLAGS)
 	$(eval UC_TARGET_OBJ += $$(wildcard qemu/util/*.o) $$(wildcard qemu/*.o) $$(wildcard qemu/qom/*.o) $$(wildcard qemu/hw/core/*.o) $$(wildcard qemu/qapi/*.o) $$(wildcard qemu/qobject/*.o))
 
 unicorn: $(LIBRARY) $(ARCHIVE)
@@ -290,7 +303,7 @@ dist:
 
 # run "make header" whenever qemu/header_gen.py is modified
 header:
-	$(eval TARGETS := m68k arm aarch64 mips mipsel mips64 mips64el\
+	$(eval TARGETS := m68k arm armeb aarch64 aarch64eb mips mipsel mips64 mips64el\
 		powerpc sparc sparc64 x86_64)
 	$(foreach var,$(TARGETS),\
 		$(shell python qemu/header_gen.py $(var) > qemu/$(var).h;))
@@ -307,7 +320,7 @@ uninstall:
 clean:
 	$(MAKE) -C qemu clean
 	rm -rf *.d *.o
-	rm -rf lib$(LIBNAME)* $(LIBNAME)*.lib $(LIBNAME)*.dll $(LIBNAME)*.exp cyg$(LIBNAME)*.dll
+	rm -rf lib$(LIBNAME)* $(LIBNAME)*.lib $(LIBNAME)*.dll $(LIBNAME)*.a $(LIBNAME)*.def $(LIBNAME)*.exp cyg$(LIBNAME)*.dll
 	$(MAKE) -C samples clean
 	$(MAKE) -C tests/unit clean
 

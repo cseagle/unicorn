@@ -21,8 +21,6 @@
 
 // posix specific
 #else // _MSC_VER
-#include <unistd.h>
-#include <inttypes.h>
 #include <unicorn/unicorn.h>
 #endif // _MSC_VER
 
@@ -100,7 +98,7 @@ static void test_sparc(void)
 
 int main(int argc, char **argv, char **envp)
 {
-	// dynamically load shared library
+    // dynamically load shared library
 #ifdef DYNLOAD
     if (!uc_dyn_load(NULL, 0)) {
         printf("Error dynamically loading shared library.\n");

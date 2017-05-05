@@ -1,9 +1,7 @@
 #include <unicorn/unicorn.h>
-#include <inttypes.h>
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 /**
  * Assert that err matches expect

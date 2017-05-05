@@ -80,9 +80,31 @@ uninstall() {
   fi
 }
 
+msvc_update_genfiles() {
+  ${MAKE}
+  cp qemu/qapi-types.h  msvc/unicorn/qapi-types.h
+  cp qemu/qapi-visit.h  msvc/unicorn/qapi-visit.h
+  cp qemu/qapi-types.c  msvc/unicorn/qapi-types.c
+  cp qemu/qapi-visit.c  msvc/unicorn/qapi-visit.c
+  cp qemu/config-host.h msvc/unicorn/config-host.h
+  cp qemu/aarch64-softmmu/config-target.h  msvc/unicorn/aarch64-softmmu/config-target.h
+  cp qemu/aarch64eb-softmmu/config-target.h  msvc/unicorn/aarch64eb-softmmu/config-target.h
+  cp qemu/arm-softmmu/config-target.h      msvc/unicorn/arm-softmmu/config-target.h
+  cp qemu/armeb-softmmu/config-target.h    msvc/unicorn/armeb-softmmu/config-target.h
+  cp qemu/m68k-softmmu/config-target.h     msvc/unicorn/m68k-softmmu/config-target.h
+  cp qemu/mips64el-softmmu/config-target.h msvc/unicorn/mips64el-softmmu/config-target.h
+  cp qemu/mips64-softmmu/config-target.h   msvc/unicorn/mips64-softmmu/config-target.h
+  cp qemu/mipsel-softmmu/config-target.h   msvc/unicorn/mipsel-softmmu/config-target.h
+  cp qemu/mips-softmmu/config-target.h     msvc/unicorn/mips-softmmu/config-target.h
+  cp qemu/sparc64-softmmu/config-target.h  msvc/unicorn/sparc64-softmmu/config-target.h
+  cp qemu/sparc-softmmu/config-target.h    msvc/unicorn/sparc-softmmu/config-target.h
+  cp qemu/x86_64-softmmu/config-target.h   msvc/unicorn/x86_64-softmmu/config-target.h
+}
+
 [ -z "${UNAME}" ] && UNAME=$(uname)
 [ -z "${MAKE}" ] && MAKE=make
 #[ -n "${MAKE_JOBS}" ] && MAKE="$MAKE -j${MAKE_JOBS}"
+
 
 if [ "$UNAME" = SunOS ]; then
   [ -z "${MAKE}" ] && MAKE=gmake
@@ -112,6 +134,7 @@ case "$1" in
   "ios_armv7s" ) build_iOS armv7s;;
   "ios_arm64" ) build_iOS arm64;;
   "linux32" ) build_linux32;;
+  "msvc_update_genfiles" ) msvc_update_genfiles;;
   * )
     echo "Usage: $0 ["`grep '^  "' $0 | cut -d '"' -f 2 | tr "\\n" "|"`"]"
     exit 1;;

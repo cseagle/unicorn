@@ -137,7 +137,10 @@ struct AddrRange {
 
 static AddrRange addrrange_make(Int128 start, Int128 size)
 {
-    return (AddrRange) { start, size };
+    AddrRange ar;
+    ar.start = start;
+    ar.size = size;
+    return ar;
 }
 
 static bool addrrange_equal(AddrRange r1, AddrRange r2)
@@ -178,7 +181,7 @@ static bool memory_listener_match(MemoryListener *listener,
         || listener->address_space_filter == section->address_space;
 }
 
-#define MEMORY_LISTENER_CALL_GLOBAL(_callback, _direction, _args...)    \
+#define MEMORY_LISTENER_CALL_GLOBAL(_callback, _direction, ...)    \
     do {                                                                \
         MemoryListener *_listener;                                      \
                                                                         \
@@ -186,7 +189,7 @@ static bool memory_listener_match(MemoryListener *listener,
         case Forward:                                                   \
             QTAILQ_FOREACH(_listener, &uc->memory_listeners, link) {        \
                 if (_listener->_callback) {                             \
-                    _listener->_callback(_listener, ##_args);           \
+                    _listener->_callback(_listener, ##__VA_ARGS__);           \
                 }                                                       \
             }                                                           \
             break;                                                      \
@@ -194,7 +197,7 @@ static bool memory_listener_match(MemoryListener *listener,
             QTAILQ_FOREACH_REVERSE(_listener, &uc->memory_listeners,        \
                                    memory_listeners, link) {            \
                 if (_listener->_callback) {                             \
-                    _listener->_callback(_listener, ##_args);           \
+                    _listener->_callback(_listener, ##__VA_ARGS__);           \
                 }                                                       \
             }                                                           \
             break;                                                      \
@@ -203,7 +206,7 @@ static bool memory_listener_match(MemoryListener *listener,
         }                                                               \
     } while (0)
 
-#define MEMORY_LISTENER_CALL(_callback, _direction, _section, _args...) \
+#define MEMORY_LISTENER_CALL(_callback, _direction, _section, ...) \
     do {                                                                \
         MemoryListener *_listener;                                      \
                                                                         \
@@ -212,7 +215,7 @@ static bool memory_listener_match(MemoryListener *listener,
             QTAILQ_FOREACH(_listener, &uc->memory_listeners, link) {        \
                 if (_listener->_callback                                \
                     && memory_listener_match(_listener, _section)) {    \
-                    _listener->_callback(_listener, _section, ##_args); \
+                    _listener->_callback(_listener, _section, ##__VA_ARGS__); \
                 }                                                       \
             }                                                           \
             break;                                                      \
@@ -221,7 +224,7 @@ static bool memory_listener_match(MemoryListener *listener,
                                    memory_listeners, link) {            \
                 if (_listener->_callback                                \
                     && memory_listener_match(_listener, _section)) {    \
-                    _listener->_callback(_listener, _section, ##_args); \
+                    _listener->_callback(_listener, _section, ##__VA_ARGS__); \
                 }                                                       \
             }                                                           \
             break;                                                      \
@@ -232,6 +235,11 @@ static bool memory_listener_match(MemoryListener *listener,
 
 /* No need to ref/unref .mr, the FlatRange keeps it alive.  */
 #define MEMORY_LISTENER_UPDATE_REGION(fr, as, dir, callback)            \
+    do { MemoryRegionSection _mrs = MemoryRegionSection_make((fr)->mr, as, (fr)->offset_in_region,	\
+            (fr)->addr.size, int128_get64((fr)->addr.start), (fr)->readonly);	\
+      MEMORY_LISTENER_CALL(callback, dir, &_mrs); } while(0);
+
+/*
     MEMORY_LISTENER_CALL(callback, dir, (&(MemoryRegionSection) {       \
         .mr = (fr)->mr,                                                 \
         .address_space = (as),                                          \
@@ -240,6 +248,7 @@ static bool memory_listener_match(MemoryListener *listener,
         .offset_within_address_space = int128_get64((fr)->addr.start),  \
         .readonly = (fr)->readonly,                                     \
               }))
+*/
 
 typedef struct FlatRange FlatRange;
 typedef struct FlatView FlatView;
@@ -475,7 +484,7 @@ static void access_with_adjusted_size(hwaddr addr,
 
     /* FIXME: support unaligned access? */
     access_size = MAX(MIN(size, access_size_max), access_size_min);
-    access_mask = -1ULL >> (64 - access_size * 8);
+    access_mask = (0-1ULL) >> (64 - access_size * 8);
     if (memory_region_big_endian(mr)) {
         for (i = 0; i < size; i += access_size) {
             access(mr, addr + i, value, access_size,
@@ -933,8 +942,12 @@ static bool unassigned_mem_accepts(void *opaque, hwaddr addr,
 }
 
 const MemoryRegionOps unassigned_mem_ops = {
-    .valid.accepts = unassigned_mem_accepts,
-    .endianness = DEVICE_NATIVE_ENDIAN,
+    NULL,
+    NULL,
+
+    DEVICE_NATIVE_ENDIAN,
+
+    {0,0,false,unassigned_mem_accepts},
 };
 
 bool memory_region_access_valid(MemoryRegion *mr,
@@ -1186,7 +1199,7 @@ bool memory_region_is_rom(MemoryRegion *mr)
 
 bool memory_region_is_iommu(MemoryRegion *mr)
 {
-    return mr->iommu_ops;
+    return mr->iommu_ops != 0;
 }
 
 void memory_region_set_readonly(MemoryRegion *mr, bool readonly)
@@ -1229,7 +1242,7 @@ int memory_region_get_fd(MemoryRegion *mr)
 void *memory_region_get_ram_ptr(MemoryRegion *mr)
 {
     if (mr->alias) {
-        return memory_region_get_ram_ptr(mr->alias) + mr->alias_offset;
+        return (char*)memory_region_get_ram_ptr(mr->alias) + mr->alias_offset;
     }
 
     assert(mr->terminates);
@@ -1416,7 +1429,7 @@ bool memory_region_is_mapped(MemoryRegion *mr)
 MemoryRegionSection memory_region_find(MemoryRegion *mr,
                                        hwaddr addr, uint64_t size)
 {
-    MemoryRegionSection ret = { .mr = NULL };
+    MemoryRegionSection ret = { NULL };
     MemoryRegion *root;
     AddressSpace *as;
     AddrRange range;
@@ -1480,14 +1493,13 @@ static void listener_add_address_space(MemoryListener *listener,
 
     view = address_space_get_flatview(as);
     FOR_EACH_FLAT_RANGE(fr, view) {
-        MemoryRegionSection section = {
-            .mr = fr->mr,
-            .address_space = as,
-            .offset_within_region = fr->offset_in_region,
-            .size = fr->addr.size,
-            .offset_within_address_space = int128_get64(fr->addr.start),
-            .readonly = fr->readonly,
-        };
+        MemoryRegionSection section = MemoryRegionSection_make(
+            fr->mr,
+            as,
+            fr->offset_in_region,
+            fr->addr.size,
+            int128_get64(fr->addr.start),
+            fr->readonly);
         if (listener->region_add) {
             listener->region_add(listener, &section);
         }
@@ -1585,11 +1597,16 @@ struct MemoryRegionList {
 typedef QTAILQ_HEAD(queue, MemoryRegionList) MemoryRegionListHead;
 
 static const TypeInfo memory_region_info = {
-    .parent             = TYPE_OBJECT,
-    .name               = TYPE_MEMORY_REGION,
-    .instance_size      = sizeof(MemoryRegion),
-    .instance_init      = memory_region_initfn,
-    .instance_finalize  = memory_region_finalize,
+    TYPE_MEMORY_REGION,
+    TYPE_OBJECT,
+
+    0,
+    sizeof(MemoryRegion),
+    NULL,
+
+    memory_region_initfn,
+    NULL,
+    memory_region_finalize,
 };
 
 void memory_register_types(struct uc_struct *uc)

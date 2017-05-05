@@ -22,8 +22,6 @@
 
 // posix specific
 #else // _MSC_VER
-#include <unistd.h>
-#include <inttypes.h>
 #include <unicorn/unicorn.h>
 #include "pthread.h"
 #endif // _MSC_VER

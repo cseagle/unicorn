@@ -1,5 +1,5 @@
-#ifndef _QEMU_ELF_H
-#define _QEMU_ELF_H
+#ifndef QEMU_ELF_H
+#define QEMU_ELF_H
 
 /*
  * i386 ELF relocation types
@@ -115,6 +115,26 @@
 #define R_SPARC_7		43
 #define R_SPARC_5		44
 #define R_SPARC_6		45
+
+
+/* Bits present in AT_HWCAP for ARM.  */
+#define HWCAP_ARM_IDIVA         (1 << 17)
+
+/* Bits present in AT_HWCAP for s390.  */
+#define HWCAP_S390_STFLE        4
+
+/* Bits present in AT_HWCAP for Sparc.  */
+#define HWCAP_SPARC_VIS3        0x00020000
+
+/* Bits present in AT_HWCAP for PowerPC.  */
+#define PPC_FEATURE_ARCH_2_06           0x00000100
+
+/* Symbolic values for the entries in the auxiliary table
+  put on the initial stack */
+#define AT_PLATFORM 15  /* string identifying CPU for optimizations */
+#define AT_HWCAP  16    /* arch dependent hints at CPU capabilities */
+#define AT_DCACHEBSIZE   19  /* data cache block size */
+#define AT_ICACHEBSIZE 20  /* instruction cache block size */
 
 /*
  * 68k ELF relocation types
@@ -444,7 +464,7 @@
 #define R_X86_64_JUMP_SLOT	7	/* Create PLT entry */
 #define R_X86_64_RELATIVE	8	/* Adjust by program base */
 #define R_X86_64_GOTPCREL	9	/* 32 bit signed pc relative
-					   offset to GOT */
+                       offset to GOT */
 #define R_X86_64_32		10	/* Direct 32 bit zero extended */
 #define R_X86_64_32S		11	/* Direct 32 bit sign extended */
 #define R_X86_64_16		12	/* Direct 16 bit zero extended */
@@ -537,4 +557,4 @@
 #define R_IA64_DTPREL64LSB	0xb7	/* @dtprel(sym + add), data8 LSB */
 #define R_IA64_LTOFF_DTPREL22	0xba	/* @ltoff(@dtprel(s+a)), imm22 */
 
-#endif /* _QEMU_ELF_H */
+#endif /* QEMU_ELF_H */

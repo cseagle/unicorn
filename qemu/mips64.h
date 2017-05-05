@@ -1,7 +1,9 @@
 /* Autogen header for Unicorn Engine - DONOT MODIFY */
 #ifndef UNICORN_AUTOGEN_MIPS64_H
 #define UNICORN_AUTOGEN_MIPS64_H
+#define arm_release arm_release_mips64
 #define aarch64_tb_set_jmp_target aarch64_tb_set_jmp_target_mips64
+#define ppc_tb_set_jmp_target ppc_tb_set_jmp_target_mips64
 #define use_idiv_instructions_rt use_idiv_instructions_rt_mips64
 #define tcg_target_deposit_valid tcg_target_deposit_valid_mips64
 #define helper_power_down helper_power_down_mips64
@@ -3921,4 +3923,6 @@
 #define mips_tcg_init mips_tcg_init_mips64
 #define mips_cpu_list mips_cpu_list_mips64
 #define mips_release mips_release_mips64
+#define MIPS64_REGS_STORAGE_SIZE MIPS64_REGS_STORAGE_SIZE_mips64
+#define MIPS_REGS_STORAGE_SIZE MIPS_REGS_STORAGE_SIZE_mips64
 #endif
