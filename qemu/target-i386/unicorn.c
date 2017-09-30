@@ -77,6 +77,7 @@ void x86_reg_reset(struct uc_struct *uc)
     env->eip = 0;
     env->eflags = 0;
     env->eflags0 = 0;
+    env->cc_op = CC_OP_EFLAGS;
 
     env->fpstt = 0; /* top of stack index */
     env->fpus = 0;
@@ -171,7 +172,7 @@ static int x86_msr_read(struct uc_struct *uc, uc_x86_msr *msr)
     helper_rdmsr(env);
 
     msr->value = ((uint32_t)env->regs[R_EAX]) |
-    	((uint64_t)((uint32_t)env->regs[R_EDX]) << 32);
+        ((uint64_t)((uint32_t)env->regs[R_EDX]) << 32);
 
     env->regs[R_EAX] = eax;
     env->regs[R_ECX] = ecx;
@@ -348,7 +349,7 @@ int x86_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int coun
                         *(int32_t *)value = X86_CPU(uc, mycpu)->env.dr[regid - UC_X86_REG_DR0];
                         break;
                     case UC_X86_REG_EFLAGS:
-                        *(int32_t *)value = X86_CPU(uc, mycpu)->env.eflags;
+                        *(int32_t *)value = cpu_compute_eflags(&X86_CPU(uc, mycpu)->env);
                         break;
                     case UC_X86_REG_EAX:
                         *(int32_t *)value = X86_CPU(uc, mycpu)->env.regs[R_EAX];
@@ -495,7 +496,7 @@ int x86_reg_read(struct uc_struct *uc, unsigned int *regs, void **vals, int coun
                         *(int64_t *)value = X86_CPU(uc, mycpu)->env.dr[regid - UC_X86_REG_DR0];
                         break;
                     case UC_X86_REG_EFLAGS:
-                        *(int64_t *)value = X86_CPU(uc, mycpu)->env.eflags;
+                        *(int64_t *)value = cpu_compute_eflags(&X86_CPU(uc, mycpu)->env);
                         break;
                     case UC_X86_REG_RAX:
                         *(uint64_t *)value = X86_CPU(uc, mycpu)->env.regs[R_EAX];
@@ -888,7 +889,7 @@ int x86_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, i
                         X86_CPU(uc, mycpu)->env.dr[regid - UC_X86_REG_DR0] = *(uint32_t *)value;
                         break;
                     case UC_X86_REG_EFLAGS:
-                        X86_CPU(uc, mycpu)->env.eflags = *(uint32_t *)value;
+                        cpu_load_eflags(&X86_CPU(uc, mycpu)->env, *(uint32_t *)value, -1);
                         X86_CPU(uc, mycpu)->env.eflags0 = *(uint32_t *)value;
                         break;
                     case UC_X86_REG_EAX:
@@ -1042,7 +1043,7 @@ int x86_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, i
                         X86_CPU(uc, mycpu)->env.dr[regid - UC_X86_REG_DR0] = *(uint64_t *)value;
                         break;
                     case UC_X86_REG_EFLAGS:
-                        X86_CPU(uc, mycpu)->env.eflags = *(uint64_t *)value;
+                        cpu_load_eflags(&X86_CPU(uc, mycpu)->env, *(uint64_t *)value, -1);
                         X86_CPU(uc, mycpu)->env.eflags0 = *(uint64_t *)value;
                         break;
                     case UC_X86_REG_RAX:
@@ -1335,6 +1336,17 @@ static bool x86_stop_interrupt(int intno)
 
 void pc_machine_init(struct uc_struct *uc);
 
+static bool x86_insn_hook_validate(uint32_t insn_enum)
+{
+    //for x86 we can only hook IN, OUT, and SYSCALL
+    if (insn_enum != UC_X86_INS_IN
+        &&  insn_enum != UC_X86_INS_OUT
+        &&  insn_enum != UC_X86_INS_SYSCALL) {
+        return false;
+    }
+    return true;
+}
+
 DEFAULT_VISIBILITY
 void x86_uc_init(struct uc_struct* uc)
 {
@@ -1350,6 +1362,7 @@ void x86_uc_init(struct uc_struct* uc)
     uc->release = x86_release;
     uc->set_pc = x86_set_pc;
     uc->stop_interrupt = x86_stop_interrupt;
+    uc->insn_hook_validate = x86_insn_hook_validate;
     uc_common_init(uc);
 }
 
