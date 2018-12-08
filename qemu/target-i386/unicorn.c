@@ -156,6 +156,7 @@ void x86_reg_reset(struct uc_struct *uc)
         case UC_MODE_64:
             env->hflags |= HF_CS32_MASK | HF_SS32_MASK | HF_CS64_MASK | HF_LMA_MASK | HF_OSFXSR_MASK;
             env->hflags &= ~(HF_ADDSEG_MASK);
+            env->efer |= MSR_EFER_LMA | MSR_EFER_LME; // extended mode activated
             cpu_x86_update_cr0(env, CR0_PE_MASK); // protected mode
             break;
     }
@@ -1185,10 +1186,10 @@ int x86_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals, i
                         X86_CPU(uc, mycpu)->env.segs[R_ES].selector = *(uint16_t *)value;
                         break;
                     case UC_X86_REG_FS:
-                        X86_CPU(uc, mycpu)->env.segs[R_FS].selector = *(uint16_t *)value;
+                        cpu_x86_load_seg(&X86_CPU(uc, mycpu)->env, R_FS, *(uint16_t *)value);
                         break;
                     case UC_X86_REG_GS:
-                        X86_CPU(uc, mycpu)->env.segs[R_GS].selector = *(uint16_t *)value;
+                        cpu_x86_load_seg(&X86_CPU(uc, mycpu)->env, R_GS, *(uint16_t *)value);
                         break;
                     case UC_X86_REG_R8:
                         X86_CPU(uc, mycpu)->env.regs[8] = *(uint64_t *)value;
