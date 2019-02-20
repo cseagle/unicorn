@@ -947,6 +947,7 @@ void helper_syscall(CPUX86State *env, int next_eip_addend)
 {
     // Unicorn: call registered syscall hooks
     struct hook *hook;
+    uint64_t saved_eip = env->eip;
     HOOK_FOREACH_VAR_DECLARE;
     HOOK_FOREACH(env->uc, hook, UC_HOOK_INSN) {
         if (!HOOK_BOUND_CHECK(hook, env->eip))
@@ -955,9 +956,11 @@ void helper_syscall(CPUX86State *env, int next_eip_addend)
             ((uc_cb_insn_syscall_t)hook->callback)(env->uc, hook->user_data);
     }
 
-    env->eip += next_eip_addend;
-    return;
-/*
+    if (env->eip != saved_eip) {
+       //syscall hook modified eip so don't proceed to qemu syscall handling
+       return;
+    }
+    
     int selector;
 
     if (!(env->efer & MSR_EFER_SCE)) {
@@ -1006,7 +1009,6 @@ void helper_syscall(CPUX86State *env, int next_eip_addend)
                                DESC_W_MASK | DESC_A_MASK);
         env->eip = (uint32_t)env->star;
     }
-*/
 }
 #endif
 #endif
@@ -2309,6 +2311,7 @@ void helper_sysenter(CPUX86State *env, int next_eip_addend)
 {
     // Unicorn: call registered SYSENTER hooks
     struct hook *hook;
+    uint64_t saved_eip = env->eip;
     HOOK_FOREACH_VAR_DECLARE;
     HOOK_FOREACH(env->uc, hook, UC_HOOK_INSN) {
         if (!HOOK_BOUND_CHECK(hook, env->eip))
@@ -2317,8 +2320,10 @@ void helper_sysenter(CPUX86State *env, int next_eip_addend)
             ((uc_cb_insn_syscall_t)hook->callback)(env->uc, hook->user_data);
     }
 
-    env->eip += next_eip_addend;
-    return;
+    if (env->eip != saved_eip) {
+       //syscall hook modified eip so don't proceed to qemu syscall handling
+       return;
+    }
 
     if (env->sysenter_cs == 0) {
         raise_exception_err(env, EXCP0D_GPF, 0);

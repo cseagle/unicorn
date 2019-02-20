@@ -128,12 +128,17 @@ int cpu_exec(struct uc_struct *uc, CPUArchState *env)   // qq
                     break;
 #else
                     bool catched = false;
+#if defined(TARGET_X86_64)
+                    uint64_t saved_eip = env->eip;
+#endif
+
                     // Unicorn: call registered interrupt callbacks
                     HOOK_FOREACH_VAR_DECLARE;
                     HOOK_FOREACH(uc, hook, UC_HOOK_INTR) {
                         ((uc_cb_hookintr_t)hook->callback)(uc, cpu->exception_index, hook->user_data);
                         catched = true;
                     }
+/*
                     // Unicorn: If un-catched interrupt, stop executions.
                     if (!catched) {
                         cpu->halted = 1;
@@ -141,12 +146,19 @@ int cpu_exec(struct uc_struct *uc, CPUArchState *env)   // qq
                         ret = EXCP_HLT;
                         break;
                     }
-                    cpu->exception_index = -1;
+*/
 #if defined(TARGET_X86_64)
-                    if (env->exception_is_int) {
+                    if (env->eip != saved_eip) {
+                        //syscall hook modified eip so don't proceed to qemu syscall handling
+                        cpu->exception_index = -1;
+                        env->eip = env->exception_next_eip;
+                    }
+/*
+                    if (env->exception_is_int && env->eip != saved_eip) {
                         // point EIP to the next instruction after INT
                         env->eip = env->exception_next_eip;
                     }
+*/                    
 #endif
 #if defined(TARGET_MIPS) || defined(TARGET_MIPS64)
                     env->active_tc.PC = uc->next_pc;
